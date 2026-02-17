@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Multi‑Provider Chat</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --border: #e5e7eb;
+      --text: #0f172a;
+      --muted: #6b7280;
+      --primary: #0b0b0b;
+      --primaryText: #ffffff;
+      --radius: 16px;
+      --codeBg: #0b0b0b;
+      --codeBorder: #1f2937;
+      --codeHeader: #111827;
+      --codeText: #e5e7eb;
+      --accent: #10b981;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, var(--bg), #ffffff);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      color: var(--text);
+    }
+    .container {
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .title {
+      font-size: 22px;
+      font-weight: 600;
+      margin: 0;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+    .section {
+      padding: 20px 24px;
+      display: grid;
+      gap: 16px;
+    }
+    label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #374151;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      outline: none;
+      font-size: 14px;
+    }
+    input:focus, select:focus, textarea:focus {
+      box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.08);
+      border-color: #d1d5db;
+    }
+    .row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .btn {
+      border: none;
+      background: var(--primary);
+      color: var(--primaryText);
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .muted {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .chat-box {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .chat-header {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      font-weight: 600;
+      color: #374151;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .chat-messages {
+      height: 320px;
+      overflow-y: auto;
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+      background: #fff;
+    }
+    .msg {
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.5;
+      word-wrap: break-word;
+      overflow-wrap: anywhere;
+    }
+    .msg.user {
+      background: #f3f4f6;
+      color: #111827;
+    }
+    .msg.assistant {
+      background: #0b0b0b;
+      color: #ffffff;
+    }
+    .msg .role {
+      font-size: 10px;
+      opacity: 0.7;
+      display: block;
+      margin-bottom: 6px;
+      letter-spacing: 0.04em;
+    }
+    .chat-input {
+      border-top: 1px solid var(--border);
+      padding: 12px;
+      display: flex;
+      gap: 10px;
+    }
+    .error {
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #b91c1c;
+      font-size: 13px;
+    }
+    .pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    /* Markdown Table Styling */
+    .msg.assistant table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      background: #0f0f0f;
+      color: #fff;
+      font-size: 13px;
+      display: block;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    .msg.assistant th,
+    .msg.assistant td {
+      border: 1px solid #2a2a2a;
+      padding: 8px;
+      text-align: left;
+      vertical-align: top;
+      word-break: break-word;
+    }
+    .msg.assistant thead {
+      background: #141414;
+    }
+
+    /* Markdown section styling */
+    .msg.assistant h1,
+    .msg.assistant h2,
+    .msg.assistant h3 {
+      margin: 12px 0 6px;
+      font-weight: 700;
+    }
+    .msg.assistant h1 { font-size: 18px; }
+    .msg.assistant h2 { font-size: 16px; }
+    .msg.assistant h3 { font-size: 14px; }
+    .msg.assistant ul,
+    .msg.assistant ol {
+      padding-left: 20px;
+      margin: 8px 0;
+    }
+    .msg.assistant blockquote {
+      border-left: 3px solid #374151;
+      margin: 8px 0;
+      padding: 6px 10px;
+      color: #cbd5e1;
+      background: #111827;
+      border-radius: 8px;
+    }
+    .msg.assistant hr {
+      border: none;
+      border-top: 1px solid #1f2937;
+      margin: 10px 0;
+    }
+
+    /* ChatGPT‑style code blocks */
+    .code-block {
+      border: 1px solid var(--codeBorder);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-top: 8px;
+      background: var(--codeBg);
+    }
+    .code-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      font-size: 12px;
+      background: var(--codeHeader);
+      color: #9ca3af;
+      border-bottom: 1px solid var(--codeBorder);
+    }
+    .code-copy {
+      border: 1px solid #374151;
+      background: #0f172a;
+      color: #e5e7eb;
+      padding: 4px 8px;
+      border-radius: 8px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .code-copy.copied {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+    .msg.assistant pre {
+      margin: 0;
+      padding: 12px;
+      overflow-x: auto;
+      background: var(--codeBg);
+      color: var(--codeText);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .msg.assistant code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+    .msg.assistant p code,
+    .msg.assistant li code {
+      background: #111827;
+      color: #e5e7eb;
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="card-header">
+        <h1 class="title">Multi‑Provider Chat</h1>
+        <div class="subtitle">OpenRouter (OpenAI‑compatible)</div>
+      </div>
+
+      <div class="section">
+        <div>
+          <label for="providerSelect">Provider</label>
+          <select id="providerSelect">
+            <option value="openrouter">OpenRouter</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="apiKey">API Key</label>
+          <input id="apiKey" type="password" placeholder="Enter provider API key..." />
+          <div class="row" style="margin-top: 10px;">
+            <button id="refreshModels" class="btn">Refresh Models</button>
+            <span class="muted">Fetches models for selected provider</span>
+          </div>
+        </div>
+
+        <div>
+          <label for="modelSelect">Choose Model</label>
+          <select id="modelSelect">
+            <option value="" disabled selected>No models loaded</option>
+          </select>
+        </div>
+
+        <div class="chat-box">
+          <div class="chat-header">
+            Chat <span class="pill">last 10 messages stored</span>
+            <span class="pill">rolling summary every 10</span>
+          </div>
+          <div id="chatMessages" class="chat-messages">
+            <div class="muted">No messages yet.</div>
+          </div>
+          <div class="chat-input">
+            <input id="userInput" placeholder="Type your message..." />
+            <button id="sendBtn" class="btn">Send</button>
+          </div>
+        </div>
+
+        <div id="errorBox" class="error" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Markdown renderer + sanitizer -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+
+  <script>
+    const PROVIDERS = {
+      openrouter: {
+        label: "OpenRouter",
+        baseUrl: "https://openrouter.ai/api/v1",
+        keyStorage: "or_api_key_v1",
+        modelStorage: "or_model_v1"
+      }
+    };
+
+    const PROVIDER_KEY = "active_provider_v1";
+    const LAST_MESSAGES_KEY = "or_last_messages_v1";
+    const SUMMARY_KEY = "chat_summary_v1";
+    const SUMMARY_BUFFER_KEY = "chat_summary_buffer_v1";
+
+    const MAX_MEMORY = 10;
+    const SUMMARY_EVERY = 10;
+
+    const providerSelect = document.getElementById("providerSelect");
+    const apiKeyEl = document.getElementById("apiKey");
+    const refreshBtn = document.getElementById("refreshModels");
+    const modelSelect = document.getElementById("modelSelect");
+    const chatMessagesEl = document.getElementById("chatMessages");
+    const userInput = document.getElementById("userInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const errorBox = document.getElementById("errorBox");
+
+    let messages = [];
+    let summary = "";
+    let summaryBuffer = [];
+
+    function setError(msg) {
+      if (!msg) {
+        errorBox.style.display = "none";
+        errorBox.textContent = "";
+        return;
+      }
+      errorBox.style.display = "block";
+      errorBox.textContent = msg;
+    }
+
+    function getProvider() {
+      return providerSelect.value;
+    }
+
+    function getProviderConfig() {
+      return PROVIDERS[getProvider()];
+    }
+
+    function saveState() {
+      localStorage.setItem(PROVIDER_KEY, getProvider());
+      const cfg = getProviderConfig();
+      localStorage.setItem(cfg.keyStorage, apiKeyEl.value.trim());
+      localStorage.setItem(cfg.modelStorage, modelSelect.value);
+      localStorage.setItem(LAST_MESSAGES_KEY, JSON.stringify(messages.slice(-MAX_MEMORY)));
+      localStorage.setItem(SUMMARY_KEY, summary || "");
+      localStorage.setItem(SUMMARY_BUFFER_KEY, JSON.stringify(summaryBuffer));
+    }
+
+    function loadState() {
+      const savedProvider = localStorage.getItem(PROVIDER_KEY) || "openrouter";
+      providerSelect.value = savedProvider;
+
+      const cfg = getProviderConfig();
+      const savedKey = localStorage.getItem(cfg.keyStorage) || "";
+      const savedModel = localStorage.getItem(cfg.modelStorage) || "";
+      const savedMessages = localStorage.getItem(LAST_MESSAGES_KEY);
+      const savedSummary = localStorage.getItem(SUMMARY_KEY) || "";
+      const savedBuffer = localStorage.getItem(SUMMARY_BUFFER_KEY);
+
+      apiKeyEl.value = savedKey;
+      summary = savedSummary;
+
+      if (savedMessages) {
+        try { messages = JSON.parse(savedMessages) || []; }
+        catch { messages = []; }
+      }
+      if (savedBuffer) {
+        try { summaryBuffer = JSON.parse(savedBuffer) || []; }
+        catch { summaryBuffer = []; }
+      }
+
+      renderMessages();
+      if (savedModel) {
+        modelSelect.value = savedModel;
+      }
+    }
+
+    function enhanceCodeBlocks(container) {
+      const blocks = container.querySelectorAll("pre > code");
+      blocks.forEach(code => {
+        const pre = code.parentElement;
+        if (pre.parentElement.classList.contains("code-block")) return;
+
+        const wrapper = document.createElement("div");
+        wrapper.className = "code-block";
+
+        const header = document.createElement("div");
+        header.className = "code-header";
+        header.innerHTML = `<span>Code</span>`;
+
+        const copyBtn = document.createElement("button");
+        copyBtn.className = "code-copy";
+        copyBtn.textContent = "Copy";
+        copyBtn.addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(code.textContent);
+            copyBtn.textContent = "Copied";
+            copyBtn.classList.add("copied");
+            setTimeout(() => {
+              copyBtn.textContent = "Copy";
+              copyBtn.classList.remove("copied");
+            }, 1200);
+          } catch {}
+        });
+
+        header.appendChild(copyBtn);
+
+        pre.replaceWith(wrapper);
+        wrapper.appendChild(header);
+        wrapper.appendChild(pre);
+      });
+    }
+
+    function renderMessages() {
+      chatMessagesEl.innerHTML = "";
+      if (messages.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "muted";
+        empty.textContent = "No messages yet.";
+        chatMessagesEl.appendChild(empty);
+        return;
+      }
+
+      messages.forEach(m => {
+        const div = document.createElement("div");
+        div.className = "msg " + (m.role === "user" ? "user" : "assistant");
+
+        const role = document.createElement("span");
+        role.className = "role";
+        role.textContent = m.role.toUpperCase();
+        div.appendChild(role);
+
+        if (m.role === "assistant") {
+          const html = DOMPurify.sanitize(marked.parse(m.content || ""));
+          const content = document.createElement("div");
+          content.innerHTML = html;
+          div.appendChild(content);
+          enhanceCodeBlocks(content);
+        } else {
+          const content = document.createElement("span");
+          content.textContent = m.content;
+          div.appendChild(content);
+        }
+
+        chatMessagesEl.appendChild(div);
+      });
+      chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+    }
+
+    function formatMessagesForSummary(msgs) {
+      return msgs.map(m => `${m.role.toUpperCase()}: ${m.content}`).join("\n");
+    }
+
+    async function updateSummaryIfNeeded() {
+      if (summaryBuffer.length < SUMMARY_EVERY) return;
+
+      const key = apiKeyEl.value.trim();
+      const model = modelSelect.value;
+      if (!key || !model) return;
+
+      const cfg = getProviderConfig();
+      const prompt = `
+You are a summarization assistant.
+Summarize the conversation so far into a compact memory that preserves:
+- key facts, names, preferences
+- decisions and plans
+- important constraints and requirements
+- unresolved questions or tasks
+
+Keep it short, factual, and structured. Avoid fluff.
+
+Existing summary:
+${summary || "None"}
+
+New messages:
+${formatMessagesForSummary(summaryBuffer)}
+      `.trim();
+
+      try {
+        const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${key}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: "system", content: "You compress chat history into a concise memory summary." },
+              { role: "user", content: prompt }
+            ]
+          })
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || "Summary update failed");
+        }
+        const data = await res.json();
+        const newSummary = data?.choices?.[0]?.message?.content || "";
+        if (newSummary) {
+          summary = newSummary;
+          summaryBuffer = [];
+          saveState();
+        }
+      } catch (e) {
+        console.warn("Summary update error:", e.message || e);
+      }
+    }
+
+    async function fetchModels() {
+      setError("");
+      const key = apiKeyEl.value.trim();
+      if (!key) {
+        setError("Please enter your API key.");
+        return;
+      }
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = "Refreshing...";
+      try {
+        const cfg = getProviderConfig();
+        const res = await fetch(`${cfg.baseUrl}/models`, {
+          headers: { Authorization: `Bearer ${key}` }
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || "Failed to fetch models");
+        }
+        const data = await res.json();
+        const models = (data?.data || []).map(m => ({ id: m.id, name: m.name || m.id }));
+
+        modelSelect.innerHTML = "";
+        if (!models.length) {
+          const opt = document.createElement("option");
+          opt.value = "";
+          opt.textContent = "No models available";
+          modelSelect.appendChild(opt);
+        } else {
+          models.forEach(m => {
+            const opt = document.createElement("option");
+            opt.value = m.id;
+            opt.textContent = m.name || m.id;
+            modelSelect.appendChild(opt);
+          });
+        }
+
+        saveState();
+      } catch (e) {
+        setError(e.message || "Error fetching models");
+      } finally {
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = "Refresh Models";
+      }
+    }
+
+    async function sendMessage() {
+      setError("");
+      const key = apiKeyEl.value.trim();
+      const model = modelSelect.value;
+      const text = userInput.value.trim();
+
+      if (!key || !model || !text) return;
+
+      const userMsg = { role: "user", content: text };
+      messages.push(userMsg);
+      summaryBuffer.push(userMsg);
+
+      messages = messages.slice(-MAX_MEMORY);
+      renderMessages();
+      saveState();
+
+      userInput.value = "";
+      sendBtn.disabled = true;
+      sendBtn.textContent = "Sending...";
+
+      try {
+        const cfg = getProviderConfig();
+
+        const payloadMessages = [];
+        if (summary && summary.trim()) {
+          payloadMessages.push({
+            role: "system",
+            content: `Conversation summary so far:\n${summary}`
+          });
+        }
+        payloadMessages.push(...messages);
+
+        const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${key}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model,
+            messages: payloadMessages
+          })
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || "Chat failed");
+        }
+        const data = await res.json();
+        const content = data?.choices?.[0]?.message?.content || "";
+
+        const assistantMsg = { role: "assistant", content: content || "No response" };
+        messages.push(assistantMsg);
+        summaryBuffer.push(assistantMsg);
+
+        messages = messages.slice(-MAX_MEMORY);
+        renderMessages();
+        saveState();
+
+        await updateSummaryIfNeeded();
+      } catch (e) {
+        setError(e.message || "Chat error");
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = "Send";
+      }
+    }
+
+    providerSelect.addEventListener("change", () => {
+      const cfg = getProviderConfig();
+      apiKeyEl.value = localStorage.getItem(cfg.keyStorage) || "";
+      modelSelect.innerHTML = `<option value="" disabled selected>No models loaded</option>`;
+      saveState();
+    });
+
+    refreshBtn.addEventListener("click", fetchModels);
+    sendBtn.addEventListener("click", sendMessage);
+    userInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") sendMessage();
+    });
+
+    apiKeyEl.addEventListener("change", saveState);
+    modelSelect.addEventListener("change", saveState);
+
+    loadState();
+  </script>
+</body>
+</html>
