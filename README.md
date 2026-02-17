@@ -20,3 +20,29 @@ A lightweight, single-file web client for interacting with multiple AI providers
 4. **Start chatting!**
 
 That's it. No `npm install`, no Docker, no server required.
+
+📝 Roadmap
+
+    Markdown rendering for code blocks
+    Conversation export (JSON/Markdown)
+    Voice input support
+    Plugin system for custom providers
+    PWA support for offline use
+
+🤝 Contributing
+
+Contributions welcome! Since this is a single-file project:
+
+    Fork the repository
+    Edit goftoshenoft.html directly
+    Test your changes in multiple browsers
+    Submit a Pull Request with a clear description
+
+Please keep the single-file philosophy in mind - avoid external dependencies unless absolutely necessary.
+📜 License
+
+MIT License - Feel free to use, modify, and distribute. See LICENSE for details.
+🙏 Acknowledgments
+
+    Icons by Heroicons
+    Inspired by the need for a simple, portable AI client
