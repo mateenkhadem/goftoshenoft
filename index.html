@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Multi‑Provider Chat</title>
+  <title>Goftoshenoft Multi‑Provider Chat</title>
   <style>
     :root {
       --bg: #f8fafc;
@@ -279,7 +279,7 @@
     <div class="card">
       <div class="card-header">
         <h1 class="title">Multi‑Provider Chat</h1>
-        <div class="subtitle">OpenRouter (OpenAI‑compatible)</div>
+        <div class="subtitle">OpenRouter + GapGPT (OpenAI‑compatible)</div>
       </div>
 
       <div class="section">
@@ -287,6 +287,7 @@
           <label for="providerSelect">Provider</label>
           <select id="providerSelect">
             <option value="openrouter">OpenRouter</option>
+            <option value="gapgpt">GapGPT</option>
           </select>
         </div>
 
@@ -316,8 +317,11 @@
           </div>
           <div class="chat-input">
             <input id="userInput" placeholder="Type your message..." />
+            <input id="fileInput" type="file" style="display:none" />
+            <button id="attachBtn" class="btn" type="button">Attach</button>
             <button id="sendBtn" class="btn">Send</button>
           </div>
+          <div id="attachedInfo" class="muted" style="padding: 0 12px 12px; display:none;"></div>
         </div>
 
         <div id="errorBox" class="error" style="display:none;"></div>
@@ -336,6 +340,12 @@
         baseUrl: "https://openrouter.ai/api/v1",
         keyStorage: "or_api_key_v1",
         modelStorage: "or_model_v1"
+      },
+      gapgpt: {
+        label: "GapGPT",
+        baseUrl: "https://api.gapgpt.app/v1",
+        keyStorage: "gap_api_key_v1",
+        modelStorage: "gap_model_v1"
       }
     };
 
@@ -347,6 +357,9 @@
     const MAX_MEMORY = 10;
     const SUMMARY_EVERY = 10;
 
+    const MAX_TEXT_FILE_BYTES = 200 * 1024;
+    const MAX_BASE64_FILE_BYTES = 500 * 1024;
+
     const providerSelect = document.getElementById("providerSelect");
     const apiKeyEl = document.getElementById("apiKey");
     const refreshBtn = document.getElementById("refreshModels");
@@ -356,9 +369,14 @@
     const sendBtn = document.getElementById("sendBtn");
     const errorBox = document.getElementById("errorBox");
 
+    const fileInput = document.getElementById("fileInput");
+    const attachBtn = document.getElementById("attachBtn");
+    const attachedInfo = document.getElementById("attachedInfo");
+
     let messages = [];
     let summary = "";
     let summaryBuffer = [];
+    let attachedFile = null;
 
     function setError(msg) {
       if (!msg) {
@@ -415,6 +433,25 @@
       if (savedModel) {
         modelSelect.value = savedModel;
       }
+    }
+
+    async function parseJsonSafe(res) {
+      const text = await res.text();
+      if (!res.ok) {
+        throw new Error(text || `HTTP ${res.status}`);
+      }
+      if (!text) return {};
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        const snippet = text.slice(0, 500);
+        throw new Error(`Non-JSON response: ${snippet}`);
+      }
+    }
+
+    function isEventStream(res) {
+      const ct = (res.headers.get("content-type") || "").toLowerCase();
+      return ct.includes("text/event-stream");
     }
 
     function enhanceCodeBlocks(container) {
@@ -533,11 +570,7 @@ ${formatMessagesForSummary(summaryBuffer)}
             ]
           })
         });
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(text || "Summary update failed");
-        }
-        const data = await res.json();
+        const data = await parseJsonSafe(res);
         const newSummary = data?.choices?.[0]?.message?.content || "";
         if (newSummary) {
           summary = newSummary;
@@ -563,11 +596,7 @@ ${formatMessagesForSummary(summaryBuffer)}
         const res = await fetch(`${cfg.baseUrl}/models`, {
           headers: { Authorization: `Bearer ${key}` }
         });
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(text || "Failed to fetch models");
-        }
-        const data = await res.json();
+        const data = await parseJsonSafe(res);
         const models = (data?.data || []).map(m => ({ id: m.id, name: m.name || m.id }));
 
         modelSelect.innerHTML = "";
@@ -594,15 +623,164 @@ ${formatMessagesForSummary(summaryBuffer)}
       }
     }
 
+    function isLikelyTextFile(file) {
+      const textTypes = ["text/", "application/json", "application/xml"];
+      if (textTypes.some(t => file.type.startsWith(t))) return true;
+      const name = file.name.toLowerCase();
+      return (
+        name.endsWith(".txt") ||
+        name.endsWith(".md") ||
+        name.endsWith(".json") ||
+        name.endsWith(".csv") ||
+        name.endsWith(".xml") ||
+        name.endsWith(".html") ||
+        name.endsWith(".css") ||
+        name.endsWith(".js") ||
+        name.endsWith(".ts") ||
+        name.endsWith(".py") ||
+        name.endsWith(".java") ||
+        name.endsWith(".c") ||
+        name.endsWith(".cpp") ||
+        name.endsWith(".cs") ||
+        name.endsWith(".rb") ||
+        name.endsWith(".go") ||
+        name.endsWith(".php")
+      );
+    }
+
+    function readFileAsText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result || "");
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(file);
+      });
+    }
+
+    function readFileAsBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result || "";
+          const base64 = result.toString().split(",")[1] || "";
+          resolve(base64);
+        };
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function setAttachedInfo(file) {
+      if (!file) {
+        attachedInfo.style.display = "none";
+        attachedInfo.textContent = "";
+        return;
+      }
+      attachedInfo.style.display = "block";
+      attachedInfo.textContent = `Attached: ${file.name} (${file.size} bytes)`;
+    }
+
+    async function buildFileNote(file) {
+      if (!file) return "";
+      const meta = `Attached file:\nName: ${file.name}\nType: ${file.type || "unknown"}\nSize: ${file.size} bytes`;
+
+      if (isLikelyTextFile(file) && file.size <= MAX_TEXT_FILE_BYTES) {
+        const text = await readFileAsText(file);
+        return `${meta}\nContent:\n${text}`;
+      }
+
+      if (file.size <= MAX_BASE64_FILE_BYTES) {
+        const b64 = await readFileAsBase64(file);
+        return `${meta}\nContent (base64):\n${b64}`;
+      }
+
+      return `${meta}\nContent omitted (file too large).`;
+    }
+
+    function extractDeltaText(payload) {
+      const choice = payload?.choices?.[0];
+      return (
+        choice?.delta?.content ||
+        choice?.message?.content ||
+        choice?.text ||
+        ""
+      );
+    }
+
+    async function readSSEStream(res, onDelta) {
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(errText || `HTTP ${res.status}`);
+      }
+      if (!res.body) {
+        throw new Error("Streaming not supported in this environment.");
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+      let done = false;
+
+      while (!done) {
+        const { value, done: doneReading } = await reader.read();
+        if (doneReading) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split(/\r?\n/);
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          if (!trimmed.startsWith("data:")) continue;
+
+          const data = trimmed.slice(5).trim();
+          if (data === "[DONE]") {
+            done = true;
+            break;
+          }
+
+          let payload;
+          try {
+            payload = JSON.parse(data);
+          } catch (e) {
+            continue;
+          }
+
+          if (payload?.error) {
+            throw new Error(payload.error.message || "Streaming error");
+          }
+
+          const deltaText = extractDeltaText(payload);
+          if (deltaText) onDelta(deltaText);
+        }
+      }
+    }
+
     async function sendMessage() {
       setError("");
       const key = apiKeyEl.value.trim();
       const model = modelSelect.value;
       const text = userInput.value.trim();
 
-      if (!key || !model || !text) return;
+      if (!key || !model || (!text && !attachedFile)) return;
 
-      const userMsg = { role: "user", content: text };
+      let fileNote = "";
+      try {
+        if (attachedFile) {
+          fileNote = await buildFileNote(attachedFile);
+        }
+      } catch (e) {
+        setError("Failed to read attached file.");
+        return;
+      }
+
+      let combined = text;
+      if (fileNote) {
+        combined = (combined ? combined + "\n\n" : "") + fileNote.trim();
+      }
+
+      const userMsg = { role: "user", content: combined };
       messages.push(userMsg);
       summaryBuffer.push(userMsg);
 
@@ -611,6 +789,10 @@ ${formatMessagesForSummary(summaryBuffer)}
       saveState();
 
       userInput.value = "";
+      attachedFile = null;
+      fileInput.value = "";
+      setAttachedInfo(null);
+
       sendBtn.disabled = true;
       sendBtn.textContent = "Sending...";
 
@@ -630,24 +812,40 @@ ${formatMessagesForSummary(summaryBuffer)}
           method: "POST",
           headers: {
             Authorization: `Bearer ${key}`,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream"
           },
           body: JSON.stringify({
             model,
-            messages: payloadMessages
+            messages: payloadMessages,
+            stream: true
           })
         });
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(text || "Chat failed");
-        }
-        const data = await res.json();
-        const content = data?.choices?.[0]?.message?.content || "";
 
-        const assistantMsg = { role: "assistant", content: content || "No response" };
+        const assistantMsg = { role: "assistant", content: "" };
         messages.push(assistantMsg);
-        summaryBuffer.push(assistantMsg);
+        renderMessages();
 
+        let streamedText = "";
+
+        if (isEventStream(res)) {
+          await readSSEStream(res, (delta) => {
+            streamedText += delta;
+            assistantMsg.content = streamedText;
+            renderMessages();
+          });
+        } else {
+          const data = await parseJsonSafe(res);
+          assistantMsg.content = data?.choices?.[0]?.message?.content || "No response";
+          renderMessages();
+        }
+
+        if (!assistantMsg.content) {
+          assistantMsg.content = "No response";
+          renderMessages();
+        }
+
+        summaryBuffer.push(assistantMsg);
         messages = messages.slice(-MAX_MEMORY);
         renderMessages();
         saveState();
@@ -672,6 +870,15 @@ ${formatMessagesForSummary(summaryBuffer)}
     sendBtn.addEventListener("click", sendMessage);
     userInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") sendMessage();
+    });
+
+    attachBtn.addEventListener("click", () => {
+      fileInput.click();
+    });
+
+    fileInput.addEventListener("change", () => {
+      attachedFile = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+      setAttachedInfo(attachedFile);
     });
 
     apiKeyEl.addEventListener("change", saveState);
